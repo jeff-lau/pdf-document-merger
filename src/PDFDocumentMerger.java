@@ -27,7 +27,7 @@ public class PDFDocumentMerger {
 		File srcDir = new File(root);
 		for (File dir : srcDir.listFiles()) {
 			if (dir.isDirectory()) {
-				mergePdfsInDir(dir);
+				mergePdfsInDir(dir, dir.getName());
 			}
 		}
 	}
@@ -41,7 +41,7 @@ public class PDFDocumentMerger {
 	 * @throws CryptographyException
 	 * @throws InvalidPasswordException
 	 */
-	private static void mergePdfsInDir(File srcDir) throws IOException, COSVisitorException, CryptographyException,
+	private static void mergePdfsInDir(File srcDir, String outputName) throws IOException, COSVisitorException, CryptographyException,
 			InvalidPasswordException {
 
 		if (srcDir.isDirectory()) {
@@ -54,7 +54,17 @@ public class PDFDocumentMerger {
 
 			List<PDDocument> docList = new ArrayList<PDDocument>();
 			for (File f : files) {
-				docList.add(PDDocument.load(f));
+				PDDocument doc = PDDocument.load(f);
+				
+				if (doc.getDocumentCatalog().getPageLabels() == null){
+					logger.warn(f.getName() + " seems to be corrupted!! Skipping file!");
+					doc.close();
+				} else {
+					docList.add(doc);
+					if (doc.isEncrypted()) {
+						doc.decrypt("");
+					}
+				}
 			}
 
 			Collections.sort(docList, getPageLabelComparator());
@@ -62,13 +72,11 @@ public class PDFDocumentMerger {
 			PDFMergerUtility merge = new PDFMergerUtility();
 			merge.setDestinationFileName(srcDir.getAbsolutePath() + "mergedOutput.pdf");
 			for (PDDocument doc : docList) {
-				if (doc.isEncrypted()) {
-					doc.decrypt("");
-				}
 				doc.setAllSecurityToBeRemoved(true);
 				merge.appendDocument(mergedOutputDocument, doc);
+				doc.close();
 			}
-			String outputFileName = srcDir.getAbsolutePath() + System.getProperty("file.separator") + "mergedOutput.pdf";
+			String outputFileName = srcDir.getAbsolutePath() + System.getProperty("file.separator") + outputName + ".pdf";
 			mergedOutputDocument.save(outputFileName);
 			mergedOutputDocument.close();
 			logger.info("Merge Complete - " + outputFileName);
@@ -88,7 +96,7 @@ public class PDFDocumentMerger {
 			Logger logger = LoggerFactory.getLogger("PageLabelComparator");
 
 			private int coercePageLabelToInt(String pageLabel) {
-				logger.info("Coercing Label - " + pageLabel);
+				logger.debug("Coercing Label - " + pageLabel);
 				int index = pageLabel.indexOf("-");
 				int output;
 				if (index > 0) {
@@ -96,7 +104,7 @@ public class PDFDocumentMerger {
 				} else {
 					output = Integer.parseInt(pageLabel);
 				}
-				logger.info("Coerce Result - " + output);
+				logger.debug("Coerce Result - " + output);
 				return output;
 			}
 
@@ -105,6 +113,7 @@ public class PDFDocumentMerger {
 				try {
 					String label1 = doc1.getDocumentCatalog().getPageLabels().getLabelsByPageIndices()[0];
 					String label2 = doc2.getDocumentCatalog().getPageLabels().getLabelsByPageIndices()[0];
+					logger.debug("Comparing page labels : " + label1 + " vs " + label2);
 					return coercePageLabelToInt(label1) - coercePageLabelToInt(label2);
 				} catch (Exception e) {
 					throw new RuntimeException("Failed to sort by page labels");
