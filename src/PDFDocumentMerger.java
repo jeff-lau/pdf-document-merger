@@ -26,8 +26,19 @@ public class PDFDocumentMerger {
 		// The root contains multiple src directories - 1 for each book.
 		File srcDir = new File(root);
 		for (File dir : srcDir.listFiles()) {
-			if (dir.isDirectory()) {
-				mergePdfsInDir(dir, dir.getName());
+			String outputFilename = dir.getName();
+			try {
+				if (dir.isDirectory()) {
+					String outputFile = dir.getAbsolutePath() + System.getProperty("file.separator") + outputFilename + "_MERGED" + ".pdf";
+					File out = new File(outputFile);
+					if (!out.exists()){
+						mergePdfsInDir(dir, outputFilename);
+					} else {
+						logger.info(outputFile + " already exists! - Skipping");
+					}
+				}
+			} catch (Exception e){
+				logger.error("Failed to merge " + outputFilename);
 			}
 		}
 	}
@@ -76,7 +87,7 @@ public class PDFDocumentMerger {
 				merge.appendDocument(mergedOutputDocument, doc);
 				doc.close();
 			}
-			String outputFileName = srcDir.getAbsolutePath() + System.getProperty("file.separator") + outputName + ".pdf";
+			String outputFileName = srcDir.getAbsolutePath() + System.getProperty("file.separator")  + outputName + "_MERGED" + ".pdf";
 			mergedOutputDocument.save(outputFileName);
 			mergedOutputDocument.close();
 			logger.info("Merge Complete - " + outputFileName);
